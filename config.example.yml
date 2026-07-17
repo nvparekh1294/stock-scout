@@ -1,0 +1,138 @@
+# Example configuration — non-secret settings only.
+# Copy this file to config.yml and edit it for your own use.
+# Secrets (API keys, DATABASE_URL, bot token) live in .env, NEVER here.
+# See .env.example.
+
+# ─────────────────────────────────────────────────────────────────────────
+# App identity. Set this to whatever you want to call your instance. It is
+# the one place the display name is defined; user-facing strings resolve it
+# from here rather than hard-coding a name.
+# ─────────────────────────────────────────────────────────────────────────
+app:
+  name: "Stock Scout"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Model matrix — which Claude model does which job. Quality lives in the
+# PROCESS (prompts + deterministic checkers), not the model.
+# ─────────────────────────────────────────────────────────────────────────
+models:
+  opus:   claude-opus-4-8        # radar walks, thesis underwriting, adversarial review
+  sonnet: claude-sonnet-5        # daily monitor, conversation, memos, brief updates
+  haiku:  claude-haiku-4-5       # extraction, dedup, classification
+
+# ─────────────────────────────────────────────────────────────────────────
+# Depth tiers — output depth. Each tier names the model it runs on and a max
+# OUTPUT token budget. usd_estimate fields are documentation only; actual
+# spend is logged to the api_costs table on every call.
+# ─────────────────────────────────────────────────────────────────────────
+depth_tiers:
+  quick:                         # "quick take" — radar default
+    model_tier: sonnet
+    max_tokens: 2000
+    usd_estimate: "0.10-0.30"
+  standard:                      # "standard dive"
+    model_tier: sonnet
+    max_tokens: 9000
+    usd_estimate: "1-3"
+  full:                          # "full underwrite" — explicit request or graduated queue
+    model_tier: opus
+    max_tokens: 16000
+    usd_estimate: "5-15"
+
+# Extraction/classification default budget (Haiku).
+extraction:
+  model_tier: haiku
+  max_tokens: 4000
+
+# ─────────────────────────────────────────────────────────────────────────
+# Cost discipline. The HARD cap should also live in your Anthropic console.
+# These are the app's own guardrails:
+#   monthly_budget_usd     — sum of api_costs this month above which a call
+#                            raises BudgetExceeded (never silently continues).
+#   escalate_consent_usd   — a single call estimated above this must get your
+#                            explicit consent first.
+# NOTE: the Anthropic API is pay-as-you-go and has NO free tier. Enabled
+# scheduled loops run Opus and bill your key automatically. Start low.
+# ─────────────────────────────────────────────────────────────────────────
+costs:
+  monthly_budget_usd: 20         # conservative default — raise deliberately
+  escalate_consent_usd: 5        # "full underwrite" territory — ask before spending
+  # Month these prices were last verified (YYYY-MM). Boot and every cost report
+  # warn plainly when this is more than 4 months old, so estimates never drift
+  # silently — verify current rates at Anthropic's pricing page and update the
+  # table below (nothing is fetched automatically).
+  pricing_as_of: "2026-07"
+  # Per-model prices ($ per 1M tokens) for the cost estimator. Update if
+  # Anthropic pricing changes; used only to ESTIMATE usd before/after a call.
+  pricing:
+    claude-opus-4-8:    { input: 5.00, output: 25.00, cache_read: 0.50 }
+    claude-sonnet-5:    { input: 3.00, output: 15.00, cache_read: 0.30 }
+    claude-haiku-4-5:   { input: 1.00, output:  5.00, cache_read: 0.10 }
+
+# ─────────────────────────────────────────────────────────────────────────
+# Scheduled loops. SHIP DISABLED. When enabled, these run automatically and
+# bill your Anthropic key (some use Opus). Turn them on only once you have set
+# a budget you are comfortable with and understand the cost.
+# ─────────────────────────────────────────────────────────────────────────
+schedules:
+  enabled: false
+  daily_monitor:   { cron: "15 17 * * *", tz: "America/New_York" }
+  radar_weekly:    { cron: "0 7 * * 1",   tz: "America/New_York" }
+  scorecard:       { cron: "0 8 1 * *",   tz: "America/New_York" }
+  policy_fast_lane: { every_minutes: 60 }
+
+# ─────────────────────────────────────────────────────────────────────────
+# Weekly research radar. `themes` is the list of investment themes the radar
+# walk explores each run — edit this list to change what it covers (no code
+# change needed). These are neutral starter themes; replace with your own.
+# ─────────────────────────────────────────────────────────────────────────
+radar:
+  themes:
+    - "AI infrastructure"
+    - "Enterprise software"
+    - "Healthcare technology"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Research feeds & data sources (read-only).
+# ─────────────────────────────────────────────────────────────────────────
+edgar:
+  # SEC EDGAR REQUIRES a descriptive User-Agent header identifying you. This
+  # ships EMPTY on purpose: set your own name and email or EDGAR calls fail
+  # loudly. SEC's fair-access policy expects a real contact string.
+  user_agent: ""
+  full_text_search: "https://efts.sec.gov/LATEST/search-index?q="
+  submissions_api:   "https://data.sec.gov/submissions/"       # + CIK##########.json
+  full_text_url:     "https://efts.sec.gov/LATEST/search-index"
+  archives_base:     "https://www.sec.gov/Archives/edgar/data/"
+
+feeds:
+  # Official-action / policy feeds — watch triggers only. Fill when sourced.
+  policy_posts_rss: ""           # official policy-maker posts (intent evidence only)
+  news_rss: []                   # general news RSS (untrusted text — fenced, never raises a score)
+  market_hours_poll_minutes: 45  # watched-ticker cadence during market hours
+
+# ─────────────────────────────────────────────────────────────────────────
+# Market data — read-only keys live in .env. Bring your own provider keys.
+# ─────────────────────────────────────────────────────────────────────────
+market_data:
+  provider: alpaca               # read-only data API; keys in .env, never printed
+  base_url: "https://data.alpaca.markets"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Tax defaults. There is NO default jurisdiction: leave this unset and the tax
+# planner refuses to run rather than silently assume a country/state. Set your
+# own jurisdiction and rates before using any tax feature.
+# ─────────────────────────────────────────────────────────────────────────
+tax:
+  jurisdiction: ""               # e.g. "US" — REQUIRED; unset means the planner refuses
+  state: ""                      # e.g. "CA" — sub-jurisdiction, if applicable
+  federal_lt_rate: null          # set once your jurisdiction is configured
+  federal_st_rate: null
+  long_term_only: false
+
+# ─────────────────────────────────────────────────────────────────────────
+# Owner-gating for the Telegram relay. The chat id is a secret → it goes in
+# .env (TELEGRAM_OWNER_CHAT_ID), not here.
+# ─────────────────────────────────────────────────────────────────────────
+telegram:
+  enabled: false                 # flips true once your bot token + chat id are set

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "sh -c \"python -m scout.migrate --seed-dir seed_localdb.example && python -m scout.telegram_bot\"",
+    "restartPolicyType": "ALWAYS",
+    "overlapSeconds": 0,
+    "drainingSeconds": 0
+  }
+}

@@ -1,0 +1,19 @@
+# Keep secrets and private data out of the upload context entirely,
+# and keep the tarball small (a local venv alone is hundreds of MB).
+.env
+.env.*
+portfolio/
+briefs/
+evidence/
+backcasts/
+research/
+seed_localdb/
+_localdb/
+scout/_localdb/
+.venv/
+scout/.venv/
+scout/_cache/
+scout/__pycache__/
+**/__pycache__/
+*.pyc
+.git/

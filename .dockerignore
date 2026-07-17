@@ -1,0 +1,19 @@
+# Never ship secrets or private data in the image.
+.env
+.env.*
+!.env.example
+portfolio/
+briefs/
+evidence/
+backcasts/
+research/
+seed_localdb/
+_localdb/
+scout/_localdb/
+.git/
+.venv/
+scout/.venv/
+scout/__pycache__/
+scout/_cache/
+**/__pycache__/
+*.pyc
