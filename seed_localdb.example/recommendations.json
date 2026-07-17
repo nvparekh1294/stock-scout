@@ -1,0 +1,17 @@
+{
+  "seq": 1,
+  "rows": [
+    {
+      "id": 1,
+      "thesis_id": 1,
+      "rec_type": "initiate",
+      "rec_date": "2026-07-14",
+      "price_at_rec": 148.20,
+      "sizing_suggestion": "Initiate small (0.5-1.0% NAV); add on a pullback toward $128 or on Q2 FY2027 Warehouse Automation revenue growth >= 25% YoY.",
+      "quadrant": "own_idea",
+      "decision": null,
+      "decision_date": null,
+      "decision_note": "SAMPLE DATA - illustrative only."
+    }
+  ]
+}

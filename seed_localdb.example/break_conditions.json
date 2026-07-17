@@ -1,0 +1,21 @@
+{
+  "seq": 2,
+  "rows": [
+    {
+      "id": 1,
+      "thesis_id": 1,
+      "ordinal": 1,
+      "condition_text": "Warehouse Automation backlog declines two consecutive quarters below $560.0M.",
+      "check_frequency": "quarterly",
+      "status": "intact"
+    },
+    {
+      "id": 2,
+      "thesis_id": 1,
+      "ordinal": 2,
+      "condition_text": "Segment gross margin falls below 38% (the bear-case margin).",
+      "check_frequency": "quarterly",
+      "status": "intact"
+    }
+  ]
+}

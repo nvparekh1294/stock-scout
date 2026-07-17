@@ -1,0 +1,25 @@
+{
+  "seq": 2,
+  "rows": [
+    {
+      "id": 1,
+      "account_id": 1,
+      "symbol": "NRDX",
+      "purchase_date": "2026-02-18",
+      "shares": 120,
+      "total_cost": 15600,
+      "source": "sample",
+      "import_confirmed": false
+    },
+    {
+      "id": 2,
+      "account_id": 1,
+      "symbol": "HLXR",
+      "purchase_date": "2026-03-05",
+      "shares": 80,
+      "total_cost": 9600,
+      "source": "sample",
+      "import_confirmed": false
+    }
+  ]
+}

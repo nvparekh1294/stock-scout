@@ -1,0 +1,15 @@
+{
+  "seq": 1,
+  "rows": [
+    {
+      "id": 1,
+      "symbol": "NRDX",
+      "stage": 1,
+      "conviction": 7,
+      "verdict": "UNDERWRITE",
+      "thesis_text": "SAMPLE DATA - illustrative only. Norvance Dynamics (NRDX), an industrial-automation mid-cap, is early in a re-rating driven by its Warehouse Automation segment: a $612.0M order backlog (up from $358.0M YoY) implies mid-20s% growth while consensus still models ~12%. The market prices the mature Motion Control base and treats the warehouse inflection as unearned.",
+      "variant_view": "Base FY2028 EPS $6.00-7.00 vs Street ~$5.40 (~20% above), driven by a 1.34x segment book-to-bill on $740.0M revenue. Bands: bear $81-90 (18x), base $156-182 (26x), bull $225-255 (30x).",
+      "status": "active"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "seq": 2,
+  "rows": [
+    {
+      "id": 1,
+      "thesis_id": 1,
+      "condition_text": "Add on a pullback toward $128 (widens base-case upside toward $156-182 with a larger margin of safety to the bear).",
+      "status": "watching"
+    },
+    {
+      "id": 2,
+      "thesis_id": 1,
+      "condition_text": "Add on confirmation: Q2 FY2027 Warehouse Automation revenue growth >= 25% YoY.",
+      "status": "watching"
+    }
+  ]
+}
