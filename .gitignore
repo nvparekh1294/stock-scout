@@ -1,0 +1,37 @@
+# ── Secrets ─────────────────────────────────────────────────────────────
+# API keys, tokens, and DATABASE_URL live in .env and are NEVER committed.
+.env
+.env.*
+!.env.example
+
+# ── Private runtime data ────────────────────────────────────────────────
+# This application stores YOUR data in the database, not in the repo. These
+# directories hold personal research, holdings, and generated output — they
+# must never enter git history. The tracked example directory is
+# seed_localdb.example/ (note the .example suffix); the real one is ignored.
+portfolio/
+briefs/
+evidence/
+backcasts/
+research/
+seed_localdb/
+_localdb/
+scout/_localdb/
+_cache/
+scout/_cache/
+
+# Generated data files
+*.csv
+
+# ── Python ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+scout/.venv/
+
+# ── Build-time version stamp (written into the image at build time) ─────
+VERSION
+
+# ── OS cruft ────────────────────────────────────────────────────────────
+.DS_Store

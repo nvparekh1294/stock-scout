@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# ── Pre-commit content check ────────────────────────────────────────────
+# Blocks a commit if any STAGED file contains a personal identifier or a
+# private ticker symbol. This is a mechanical backstop, not a substitute for
+# reading your own diff. Enable it once per clone with:
+#
+#     git config core.hooksPath .githooks
+#
+# (see README / CONTRIBUTING). To bypass in a genuine emergency, commit with
+# --no-verify — but understand exactly why the hook fired first.
+set -euo pipefail
+
+# Personal-identifier blocklist (matched case-insensitively).
+BLOCK='nikita|parekh|nvparekh|nikitaparekh94|goldman|gs growth|\bgs\b|\bturing\b|betterment|fidelity|robinhood|vanguard|schwab|ibkr|trading agent|707-8903'
+
+# Private ticker set (matched case-sensitively so ordinary English words like
+# "mu" or "lite" do not trip the gate — only uppercase symbols do).
+TICKERS='\b(LITE|USAR|AGX|AVGO|CIEN|MU|WDC|LAZR|AJRD)\b'
+
+fail=0
+
+# Sanctioned-attribution allowlist: files where the author's public name is
+# meant to appear, and this hook itself, which must contain the patterns above
+# in order to match on them. Everything else is scanned.
+is_allowed() {
+  case "$1" in
+    LICENSE|.githooks/pre-commit) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Only inspect files that are staged for this commit (added/copied/modified).
+while IFS= read -r -d '' file; do
+  is_allowed "$file" && continue
+
+  # Read the staged blob (what will actually be committed), not the worktree.
+  content="$(git show ":$file" 2>/dev/null || true)"
+  [ -z "$content" ] && continue
+
+  if printf '%s' "$content" | grep -inE "$BLOCK" >/dev/null 2>&1; then
+    echo "BLOCKED: personal identifier found in staged file: $file"
+    printf '%s' "$content" | grep -inE "$BLOCK" | sed 's/^/    /'
+    fail=1
+  fi
+
+  if printf '%s' "$content" | grep -nE "$TICKERS" >/dev/null 2>&1; then
+    echo "BLOCKED: private ticker symbol found in staged file: $file"
+    printf '%s' "$content" | grep -nE "$TICKERS" | sed 's/^/    /'
+    fail=1
+  fi
+done < <(git diff --cached --name-only -z --diff-filter=ACM)
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "Commit rejected by the pre-commit content check. Remove the flagged"
+  echo "content and re-stage. This gate protects against leaking private data"
+  echo "into a public repository."
+  exit 1
+fi
+
+exit 0
