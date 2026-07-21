@@ -366,3 +366,61 @@ def test_split_since_fy_ratio_logic():
     finally:
         f._bar_close_near = orig
     assert f.split_since_fy("X", None) == "unknown"
+
+
+# ── XBRL tag-migration merge + staleness guard (NVDA P/S-185x bug) ────────────
+def test_company_facts_merges_aliases_picks_latest_fy():
+    # NVDA-shaped migration: the OLD revenue tag holds only older FYs, the NEW
+    # tag holds the recent FYs. Best-across-aliases selection must use the RECENT
+    # revenue, not the ~4-year-old figure the first-alias logic returned.
+    from datetime import date, timedelta
+    from scout import fundamentals as fund
+
+    def fy(days_ago, val):
+        e = date.today() - timedelta(days=days_ago)
+        s = e - timedelta(days=364)
+        return {"start": s.isoformat(), "end": e.isoformat(), "val": val,
+                "fp": "FY", "form": "10-K"}
+
+    latest_end = (date.today() - timedelta(days=100)).isoformat()
+    old_tag = "RevenueFromContractWithCustomerExcludingAssessedTax"
+    facts = {"entityName": "NVIDIA", "facts": {
+        "us-gaap": {
+            old_tag: {"units": {"USD": [fy(1200, 10e9), fy(835, 16e9), fy(470, 26.9e9)]}},
+            "Revenues": {"units": {"USD": [fy(465, 60e9), fy(100, 130.9e9)]}},
+            "EarningsPerShareDiluted": {"units": {"USD": [fy(100, 2.94)]}},
+        },
+        "dei": {"EntityCommonStockSharesOutstanding": {
+            "units": {"shares": [{"end": latest_end, "val": 24.4e9}]}}},
+    }}
+    orig = fund._facts
+    fund._facts = lambda cik: facts
+    try:
+        vs = fund.valuation_snapshot(1045810, price=170.0)  # symbol=None → no split fetch
+    finally:
+        fund._facts = orig
+    assert vs["fy_end"] == latest_end, vs["fy_end"]
+    assert abs(vs["revenue"] - 130.9e9) < 1, vs["revenue"]  # recent, not 26.9e9
+    assert not vs["stale"], vs
+    assert vs["ps"] is not None and vs["ps"] < 50, vs["ps"]  # ≈31.7×, not ~154×
+
+
+def test_valuation_snapshot_stale_fy_renders_not_found():
+    # Defense in depth: a latest FY older than ~450 days must NOT be divided into
+    # today's price — every FY-derived line renders the staleness NOT FOUND reason.
+    from datetime import date, timedelta
+    stale_end = (date.today() - timedelta(days=500)).isoformat()
+    facts = {"revenue": 26.9e9, "rev_growth": 0.5, "eps_diluted": 2.0, "shares": 24e9,
+             "net_income": 5e9, "fy_end": stale_end, "entity": "X", "source_url": "u"}
+    restore = _patch(_CLEAN_FILER, price=_PRICE, facts=facts)
+    try:
+        md, n = gather.light_evidence("AAPL")
+    finally:
+        restore()
+    block = _valuation_block(md)
+    assert "too stale to compute against today's price" in block, block
+    assert "FY revenue: NOT FOUND (latest filed FY ends" in block, block
+    assert "FY diluted EPS: NOT FOUND (latest filed FY ends" in block, block
+    assert "Trailing P/E: NOT FOUND (latest filed FY ends" in block, block
+    assert "P/S: NOT FOUND (latest filed FY ends" in block, block
+    assert "- Market cap: $2.40T" in block, block  # current shares × price still prints

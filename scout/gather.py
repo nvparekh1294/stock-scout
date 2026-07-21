@@ -248,18 +248,29 @@ def _valuation_section(res: dict, price: dict, today: str,
     else:
         lines.append("- Market cap: NOT FOUND (need both a live close and EDGAR "
                      "shares outstanding).")
-    if vs.get("revenue") is not None:
+    # Staleness guard: the latest filed FY is too old to value against today's
+    # price — every FY-derived line is NOT FOUND with the honest reason, so we
+    # never juxtapose years-old fundamentals with a live quote (the NVDA bug).
+    stale = vs.get("stale")
+    stale_reason = f"latest filed FY ends {fy} — too stale to compute against today's price"
+    if stale:
+        lines.append(f"- FY revenue: NOT FOUND ({stale_reason}).")
+    elif vs.get("revenue") is not None:
         rg = vs.get("rev_growth")
         rg_txt = (f"; revenue YoY {rg * 100:+.1f}%" if rg is not None
                   else "; revenue YoY NOT FOUND (no prior-year revenue in facts)")
         lines.append(f"- FY revenue: {_human_usd(vs['revenue'])} (FY {fy}){rg_txt}.")
     else:
         lines.append("- FY revenue: NOT FOUND in EDGAR company-facts.")
-    if vs.get("eps_diluted") is not None:
+    if stale:
+        lines.append(f"- FY diluted EPS: NOT FOUND ({stale_reason}).")
+    elif vs.get("eps_diluted") is not None:
         lines.append(f"- FY diluted EPS: ${vs['eps_diluted']:.2f} (FY {fy}).")
     else:
         lines.append("- FY diluted EPS: NOT FOUND in EDGAR company-facts.")
-    if vs.get("pe") is not None:
+    if stale:
+        lines.append(f"- Trailing P/E: NOT FOUND ({stale_reason}).")
+    elif vs.get("pe") is not None:
         caveat = (" (caveat: if the stock split since the FY filing, filed EPS may "
                   "be pre-split)") if vs.get("pe_caveat") else ""
         lines.append(f"- Trailing P/E: {vs['pe']:.1f}× (close ÷ FY diluted EPS){caveat}.")
@@ -278,7 +289,9 @@ def _valuation_section(res: dict, price: dict, today: str,
         if vs.get("eps_diluted") is None:
             missing.append("FY diluted EPS")
         lines.append(f"- Trailing P/E: NOT FOUND (need {' and '.join(missing) or 'inputs'}).")
-    if vs.get("ps") is not None:
+    if stale:
+        lines.append(f"- P/S: NOT FOUND ({stale_reason}).")
+    elif vs.get("ps") is not None:
         lines.append(f"- P/S: {vs['ps']:.1f}× (market cap ÷ FY revenue).")
     else:
         lines.append("- P/S: NOT FOUND (need market cap and positive FY revenue).")

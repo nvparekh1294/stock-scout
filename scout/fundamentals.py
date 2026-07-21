@@ -43,6 +43,9 @@ _SHARES_GAAP = ("CommonStockSharesOutstanding",
 # Reported diluted EPS for the fiscal year (a filed line item — not computed —
 # so trailing P/E traces to the filing, never to net_income ÷ shares guesswork).
 _EPS_DILUTED = ("EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted")
+# A 10-K should land within ~90 days of FY end; a latest FY older than this is
+# too stale to compute price-relative multiples against (staleness guard).
+STALE_FY_DAYS = 450
 
 
 def _facts(cik: int) -> dict | None:
@@ -105,6 +108,33 @@ def _latest_instant(arr: list):
     return max(pts, key=lambda x: x["end"])
 
 
+def _merged_annual_fy(facts: dict, names, ns: str = "us-gaap") -> list:
+    """FY duration points MERGED across ALL aliases, not just the first one that
+    has data. Companies migrate XBRL tags mid-history (NVDA filed revenue under
+    RevenueFromContractWithCustomerExcludingAssessedTax through FY2022, then plain
+    Revenues after) — the old 'first alias with any data' logic served 4-year-old
+    revenue as the latest FY (the P/S-185x bug). Concatenate every alias's points,
+    then _annual_fy dedupes by end date (later wins) and sorts oldest→newest, so
+    the returned [-1] is the most recent FY across the whole tag history."""
+    merged = []
+    for n in names:
+        arr = _concept(facts, n, ns)
+        if arr:
+            merged += arr
+    return _annual_fy(merged)
+
+
+def _best_instant(facts: dict, names, ns: str = "us-gaap"):
+    """Latest-end instant point across ALL aliases (migration-safe analogue of
+    _merged_annual_fy for balance-sheet / cover-page concepts like cash, shares)."""
+    best = None
+    for n in names:
+        pt = _latest_instant(_concept(facts, n, ns))
+        if pt and (best is None or pt["end"] > best["end"]):
+            best = pt
+    return best
+
+
 def _sum_present(facts: dict, names) -> float | None:
     """Sum the latest-instant values of the given concepts that ARE present.
     Returns None if none are present (so a genuinely-absent line stays NOT
@@ -128,7 +158,7 @@ def company_facts_metrics(cik: int) -> dict | None:
     out: dict = {"source_url": COMPANYFACTS.format(cik=cik),
                  "entity": facts.get("entityName")}
 
-    rev_pts = _annual_fy(_first_concept(facts, _REVENUE) or [])
+    rev_pts = _merged_annual_fy(facts, _REVENUE)
     rev = rev_pts[-1]["val"] if rev_pts else None
     rev_prior = rev_pts[-2]["val"] if len(rev_pts) >= 2 else None
     fy_end = rev_pts[-1]["end"] if rev_pts else None
@@ -137,7 +167,7 @@ def company_facts_metrics(cik: int) -> dict | None:
     out["rev_growth"] = ((rev / rev_prior - 1) if rev and rev_prior else None)
 
     def latest_fy_val(names):
-        pts = _annual_fy(_first_concept(facts, names) or [])
+        pts = _merged_annual_fy(facts, names)
         # prefer the FY matching the revenue FY end so all cells are same-period
         if fy_end:
             for p in pts:
@@ -178,11 +208,11 @@ def company_facts_metrics(cik: int) -> dict | None:
     out["debt"] = debt
     out["de"] = (debt / equity if debt is not None and equity else None)
 
-    cash_pt = _latest_instant(_first_concept(facts, _CASH))
+    cash_pt = _best_instant(facts, _CASH)
     out["cash"] = float(cash_pt["val"]) if cash_pt else None
 
-    sh_pt = _latest_instant(_first_concept(facts, _SHARES_DEI, ns="dei")) \
-        or _latest_instant(_first_concept(facts, _SHARES_GAAP))
+    sh_pt = _best_instant(facts, _SHARES_DEI, ns="dei") \
+        or _best_instant(facts, _SHARES_GAAP)
     out["shares"] = float(sh_pt["val"]) if sh_pt else None
     return out
 
@@ -296,6 +326,8 @@ def valuation_snapshot(cik: int, price: float | None, fund: dict | None = None,
     a cheap split-detection guard runs (split_since_fy): a split since the FY
     filing → pe_split=True (filed EPS is pre-split, not yet restated → no number);
     detection unavailable → pe_caveat=True (print P/E with an explicit caveat).
+    A latest FY older than STALE_FY_DAYS → stale=True and no multiple is computed
+    (caller renders the FY-derived lines NOT FOUND with the staleness reason).
     `fund` may be a pre-fetched company_facts_metrics dict to avoid a second EDGAR
     fetch. Returns None only if company-facts can't be fetched at all."""
     f = fund or company_facts_metrics(cik)
@@ -305,12 +337,24 @@ def valuation_snapshot(cik: int, price: float | None, fund: dict | None = None,
     eps = f.get("eps_diluted")
     shares = f.get("shares")
     fy_end = f.get("fy_end")
+    # Staleness guard (defense in depth): even after alias merging, a company that
+    # stopped filing leaves an old latest FY — do not divide today's price by
+    # years-old fundamentals (the NVDA P/S-185x class). A 10-K should land within
+    # ~90 days of FY end, so a FY end older than STALE_FY_DAYS is not usable.
+    stale = False
+    if fy_end:
+        try:
+            stale = (date.today() - date.fromisoformat(fy_end)).days > STALE_FY_DAYS
+        except Exception:
+            stale = False
     mcap = (price * shares) if (price and shares) else None
     # A multiple is only meaningful with a positive denominator (same discipline
-    # as peer_metric_row): a loss-maker has no trailing P/E.
-    ps = (mcap / rev) if (mcap and rev and rev > 0) else None
+    # as peer_metric_row): a loss-maker has no trailing P/E. Stale FY → no multiple.
+    ps = (mcap / rev) if (not stale and mcap and rev and rev > 0) else None
     pe, pe_nm, pe_split, pe_caveat = None, False, False, False
-    if eps is not None and eps <= 0:
+    if stale:
+        pass  # every FY-derived cell suppressed; caller prints the staleness reason
+    elif eps is not None and eps <= 0:
         pe_nm = True  # negative/zero earnings → P/E not meaningful (price-independent)
     elif price and eps is not None and eps > 0:
         # About to compute P/E → now (and only now) pay for the split guard.
@@ -323,6 +367,7 @@ def valuation_snapshot(cik: int, price: float | None, fund: dict | None = None,
     return {
         "entity": f.get("entity"),
         "fy_end": fy_end,
+        "stale": stale,
         "price": price,
         "revenue": rev,
         "rev_growth": f.get("rev_growth"),
