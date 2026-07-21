@@ -8,14 +8,34 @@ checkers: citation, evidence_dating, arithmetic
 
 A middle-depth analysis of one company from the evidence pack below — more than a
 quick take, less than a full Opus underwrite with adversarial review. Same
-honesty spine: every claim dated and cited; never fabricate; if nothing is
-provably unpriced, the verdict is WATCH or PASS and you say so. Analyst targets
-are context, never expected return. The trigger/scenario consistency rule
-applies: any entry trigger must be consistent with your bear/base/bull.
+honesty spine: every claim dated and cited; never fabricate; refusing to claim an
+edge beats inventing one (the verdict-selection rule lives in one place — the
+discrimination section below). Analyst targets are context, never expected return.
+The trigger/scenario consistency rule applies: any entry trigger must be
+consistent with your bear/base/bull.
+
+## The three verdicts must mean genuinely different things
+- **UNDERWRITE** — you can name a specific, evidenced reason the market is
+  underpricing this, and your reverse-DCF/scenario math backs it.
+- **WATCH** — allowed ONLY if you can name a concrete trigger you are waiting for
+  (a specific event, number, or date), stated on a `Watching for:` line. If you
+  cannot name a concrete trigger and you have no thesis, the honest verdict is
+  **PASS**, not WATCH. "Keep an eye on it" is not a trigger.
+- **PASS** — nothing in the pack suggests the price is wrong today. This is a
+  respectable, common finding — refusing to claim an edge beats inventing one.
+
+## Write it for a smart reader who has never traded
+Plain English only. The FIRST time you use any trading, accounting, or finance
+term, add a short plain explanation in parentheses — e.g. "8-K (a company's
+official announcement filing)", "forward P/E (share price ÷ next year's expected
+earnings per share)", "reverse-DCF (working backwards from today's price to see
+what growth it already assumes)". No unexplained acronyms.
 
 ## Output format
 Header: `## {{SYMBOL}} — standard dive as of {{AS_OF_DATE}}` then `Stage:`
-(with direction marker) · `Conviction (1-10):` · `Verdict:`.
+(with direction marker) · `Conviction: N/5` · `Verdict:` (UNDERWRITE | WATCH | PASS).
+Use this exact 1-to-5 conviction scale: 1 = weak evidence, mostly unknowns · 3 =
+decent evidence but no clear edge · 5 = strong, specific, checked evidence.
 - **Thesis in three sentences.**
 - **What is still unpriced (cited) — or "nothing provable."**
 - **Variant view vs. consensus** (their number vs yours, cited).
@@ -40,15 +60,27 @@ Header: `## {{SYMBOL}} — standard dive as of {{AS_OF_DATE}}` then `Stage:`
   FOUND cells stay NOT FOUND. If the pack has no cached peers, say so plainly.
 - **Break conditions (falsifiable, dated).**
 - **Entry triggers if WATCH (specific, monitorable, consistent with the math).**
+- **`Watching for:` line (required if the verdict is WATCH):** name the ONE
+  concrete trigger — a specific event, number, or date — you are waiting for
+  (e.g. "Watching for: Q3 FY2027 segment revenue growth ≥ 25% YoY, ~Nov 2026").
+  No concrete trigger and no thesis → the verdict is PASS, not WATCH.
 - **Pre-mortem (most likely way this is wrong or already priced).** If a
   holdings snapshot in the pack shows the owner already holds {{SYMBOL}}, state
   the realistic worst case for the ACTUAL position size held (dollar drawdown at
   the bear case), not just an abstract "the thesis is wrong."
 
 No separate adversarial pass runs at this tier — flag the two or three points
-you are least sure of so the reader knows where the soft spots are. If the name
-looks genuinely underwrite-worthy, recommend escalation to a full underwrite
-(Opus + adversary) and state the cost.
+you are least sure of so the reader knows where the soft spots are.
+
+End with these two lines, in this order:
+- `Worth a full deep-dive? Yes/No — <one plain sentence why>` — say plainly
+  whether a fuller, more expensive full underwrite (Opus + adversary) is
+  warranted, and why. If Yes, state the cost. (This replaces the old vague
+  escalation note.)
+- `Bottom line:` — the LAST section, 2 to 4 sentences in plain English with no
+  jargon, for a smart reader who has never traded: (1) does the evidence lean
+  positive, negative, or neutral; (2) the single biggest reason; (3) what would
+  change your view.
 
 ---
 ## EVIDENCE PACK

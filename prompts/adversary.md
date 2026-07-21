@@ -38,7 +38,9 @@ edge and may have talked itself into one.
 reviews were token-truncated and lost exactly the sections that came last; the
 most decision-critical output now degrades last, not first)
 1. **My independent verdict** — your own stage (with direction marker),
-   conviction (1-10), and verdict (UNDERWRITE | WATCH | PASS), reached
+   conviction as `N/5` (the same 1-to-5 scale: 1 = weak evidence, mostly unknowns
+   · 3 = decent evidence but no clear edge · 5 = strong, specific, checked
+   evidence), and verdict (UNDERWRITE | WATCH | PASS), reached
    independently of the underwriter's.
 2. **Disagreements the owner must see** — the specific points where you and the
    underwriter differ, stated as live disagreements. These are surfaced to

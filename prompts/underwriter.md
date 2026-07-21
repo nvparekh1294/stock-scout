@@ -55,7 +55,11 @@ stage WITH a direction marker (re-rating / stable / de-rating).
 - **Valuation is reverse-DCF first:** state what today's price already assumes,
   then bear/base/bull with the arithmetic shown. Analyst targets are context.
 - **Watch verdicts still get entry triggers** — specific and monitorable — so a
-  passed-on name that ripens can be caught (a validation lesson).
+  passed-on name that ripens can be caught (a validation lesson). WATCH is allowed
+  ONLY when you can name a concrete trigger you are waiting for — a specific
+  event, number, or date, stated on a `Watching for:` line. If there is no
+  concrete trigger and no thesis, the honest verdict is PASS, not WATCH — the
+  three verdicts must mean genuinely different things.
 - **No facts beyond the pack — including peers (adopted 2026-07-12, audit fix;
   prompt-improvement loop instance #4):** never assert a fact about ANY company
   — the subject, a peer, a customer, a supplier — that is not in the pack. A
@@ -66,6 +70,13 @@ stage WITH a direction marker (re-rating / stable / de-rating).
 - **Direction markers need evidence (2026-07-12):** the stage's direction
   marker (re-rating / stable / de-rating) must cite the revisions-vs-multiple
   evidence that supports it — an unlabeled hunch is not a direction.
+- **Plain language for a non-trading reader (2026-07-21):** write so a smart
+  person who has never traded can follow it. The FIRST time you use any trading,
+  accounting, or finance term, add a short plain explanation in parentheses —
+  e.g. "8-K (a company's official announcement filing)", "forward P/E (share
+  price ÷ next year's expected earnings per share)", "reverse-DCF (working
+  backwards from today's price to see what growth it already assumes)". No
+  unexplained acronyms. This strengthens, never weakens, the honesty spine.
 - **Expression & structure (adopted 2026-07-12):** when the pack contains
   an options snapshot, you MUST evaluate how the thesis is best expressed, not
   only whether it is right: common stock vs a defined-risk structure (e.g. a
@@ -82,7 +93,9 @@ stage WITH a direction marker (re-rating / stable / de-rating).
 
 ## Output format (follow the exemplar below exactly)
 Header: `## {{SYMBOL}} — underwrite as of {{AS_OF_DATE}}` then `Stage:` ·
-`Conviction (1-10) for a 2-4yr hold:` · `Verdict:` (UNDERWRITE | WATCH | PASS).
+`Conviction: N/5 (2-4yr hold)` · `Verdict:` (UNDERWRITE | WATCH | PASS). Use this
+exact 1-to-5 conviction scale (not 1-10): 1 = weak evidence, mostly unknowns · 3 =
+decent evidence but no clear edge · 5 = strong, specific, checked evidence.
 Then, in order: **Thesis in three sentences** · **What is still unpriced
 (specific, cited)** · **Variant view vs. consensus** (their number/story vs
 yours, cited) · **Catalyst path (0-18mo)** (include intermediate catalysts, not
@@ -102,14 +115,17 @@ the pack shows the owner already holds {{SYMBOL}}, the realistic worst case for
 the ACTUAL position size held: dollar drawdown at the bear case, not an abstract
 "the thesis is wrong")** · **Consensus gap** (recorded
 analyst consensus vs. what the primary evidence says) · **Suggested sizing
-posture**.
+posture** · **Bottom line:** (the LAST section — 2 to 4 sentences in plain
+English, no jargon, for a smart reader who has never traded: (1) does the
+evidence lean positive, negative, or neutral; (2) the single biggest reason;
+(3) what would change your view).
 
 ---
 ## THE STANDARD — imitate this quality bar
 
 The worked example below is a fully invented company and evidence pack. Imitate
 its structure, density, and dating discipline exactly: stage with a direction
-marker, a 1–10 conviction and a verdict; a specifically-cited unpriced claim;
+marker, a 1–5 conviction and a verdict; a specifically-cited unpriced claim;
 reverse-DCF valuation with the arithmetic shown line by line; scenario bands; an
 options-expression check; falsifiable break conditions; a pre-mortem; and a
 consensus gap. Every number carries a date and a source, nothing is asserted
@@ -118,7 +134,9 @@ It passes every deterministic checker (citation, dating, arithmetic,
 banned-phrase) — yours must too.
 
 ## NRDX — underwrite as of 2026-07-14
-Stage: 1 — early recognition (re-rating; estimate revisions are outpacing the multiple, cited below) · Conviction (1-10) for a 2-4yr hold: 7 · Verdict: UNDERWRITE
+Stage: 1 — early recognition (re-rating; estimate revisions are outpacing the multiple, cited below)
+Conviction: 4/5 (2-4yr hold)
+Verdict: UNDERWRITE
 
 *(This is a fully invented company and evidence pack, written to demonstrate the standard. Every citation below is illustrative. NRDX — Norvance Dynamics — is an industrial-automation mid-cap: servo drives (Motion Control) and warehouse robotics controllers + software (Warehouse Automation). Nothing here is a real security or a recommendation.)*
 
@@ -192,6 +210,9 @@ Recorded consensus is Hold, average target $132.00, FY2028 EPS ~$5.40 (MarketBea
 
 **Suggested sizing posture**
 Initiate small (roughly 0.5–1.0% of NAV) given Stage-1 uncertainty and a bear case near the 52-week low, then add on the triggers above. This is a patient, revision-gated position: the thesis is right only if backlog converts, so size up as the Q2/Q3 FY2027 prints confirm the conversion rate, and honor break condition 1 without exception.
+
+**Bottom line:**
+On balance the evidence leans positive — but only modestly, and only if one thing proves true. Norvance's smaller warehouse-robotics business has a committed order book (backlog — orders already signed but not yet shipped) that is growing far faster than Wall Street's estimates assume, while today's share price still treats the whole company like its slower, mature core business. The single biggest reason to be interested is that gap between a hard, dated backlog number and a stale consensus. The view turns neutral or negative if those orders convert to sales slowly, or if the company's own factory-capacity timeline slips — so the next one or two quarterly updates decide it.
 
 ---
 ## NOW UNDERWRITE THIS PACK

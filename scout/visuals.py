@@ -147,8 +147,13 @@ def price_chart_svg(series: dict, width: int = 680, height: int = 220) -> str:
 
 
 # ── key-number cards ───────────────────────────────────────────────────────
-def _card(label: str, value: str, sub: str) -> str:
+def _card(label: str, value: str, sub: str, plain: str = "") -> str:
+    """One key-number card. `plain` (optional) is a plain-English descriptor shown
+    just under the jargon label so a non-trading reader knows what the number
+    means (e.g. "P/S" → "price vs. yearly sales")."""
+    plain_html = f'<div class="kn-plain">{plain}</div>' if plain else ""
     return (f'<div class="kn-card"><div class="kn-label">{label}</div>'
+            f'{plain_html}'
             f'<div class="kn-value">{value}</div>'
             f'<div class="kn-sub">{sub}</div></div>')
 
@@ -171,15 +176,20 @@ def key_number_cards(metrics: dict) -> str:
     cards = [
         _card("Price", price, f"Alpaca IEX · {metrics.get('price_asof', NF)}"),
         _card("52-wk range", (f"{lo} – {hi}" if hi != NF or lo != NF else NF),
-              f"Alpaca IEX · {metrics.get('range_asof', NF)}"),
+              f"Alpaca IEX · {metrics.get('range_asof', NF)}",
+              plain="lowest–highest over the past year"),
         _card("TTM EPS", v(metrics.get("ttm_eps"), "{:,.2f}", "$"),
-              metrics.get("ttm_eps_src") or "from pack"),
+              metrics.get("ttm_eps_src") or "from pack",
+              plain="earnings per share, last 12 months"),
         _card("P/S", v(metrics.get("ps"), "{:,.1f}×"),
-              metrics.get("ps_src") or "from pack"),
+              metrics.get("ps_src") or "from pack",
+              plain="price vs. yearly sales"),
         _card("Fwd P/E", v(metrics.get("fwd_pe"), "{:,.1f}×"),
-              metrics.get("fwd_pe_src") or "from pack"),
+              metrics.get("fwd_pe_src") or "from pack",
+              plain="price vs. next year's expected earnings"),
         _card("Analyst consensus", v(metrics.get("consensus")),
-              f"as of {metrics.get('consensus_date', NF)}"),
+              f"as of {metrics.get('consensus_date', NF)}",
+              plain="average analyst price target"),
     ]
     return '<div class="kn-cards">' + "".join(cards) + '</div>'
 
@@ -191,12 +201,13 @@ VISUAL_CSS = """
  background:#f7f8fb}
 .kn-label{font-size:.72em;text-transform:uppercase;letter-spacing:.04em;
  color:#6b6b83}
+.kn-plain{font-size:.64em;color:#8a8aa0;line-height:1.25;margin:1px 0 0}
 .kn-value{font-size:1.12em;font-weight:600;margin:2px 0}
 .kn-sub{font-size:.68em;color:#8a8aa0}
 .chart-missing{color:#8a8aa0;font-size:.85em;font-style:italic;margin:8px 0}
 @media(prefers-color-scheme:dark){
  .kn-card{border-color:#3a3a52;background:#1c1c2b}
- .kn-label{color:#a0a0b8}.kn-sub{color:#7a7a92}}
+ .kn-label{color:#a0a0b8}.kn-sub{color:#7a7a92}.kn-plain{color:#9a9ab0}}
 :root[data-theme=dark] .kn-card{border-color:#3a3a52;background:#1c1c2b}
 :root[data-theme=light] .kn-card{border-color:#cbd0d8;background:#f7f8fb}
 """
@@ -250,6 +261,18 @@ def _ttm_eps_from_text(t: str) -> float | None:
     return _f(m.group(1)) if m else None
 
 
+def _num(s: str | None) -> float | None:
+    """Parse a possibly comma-formatted numeric fragment to float, or None if it
+    isn't a real number. The P/S and forward-P/E regexes can match a comma-only
+    fragment (e.g. "forward P/E, and forward EPS are NOT FOUND") that float()
+    would choke on — returning None lets the caller skip the field instead of
+    crashing the whole header render. Never raises."""
+    try:
+        return float((s or "").replace(",", ""))
+    except (ValueError, AttributeError):
+        return None
+
+
 def parse_metrics_from_brief(text: str) -> dict:
     """Best-effort extraction of the fundamentals the header shows, from the
     brief body (which carries pack-sourced, dated figures). Never invents — a
@@ -264,10 +287,12 @@ def parse_metrics_from_brief(text: str) -> dict:
     # P/S — "P/S ≈ 7.4x" / "7.4x trailing sales" / "trailing P/S ≈ 7.4x"
     ps = re.search(r"P/?S\s*[≈~]?\s*([\d,]+(?:\.\d+)?)\s*[x×]", t, re.I) \
         or re.search(r"([\d,]+(?:\.\d+)?)\s*[x×]\s*(?:trailing\s*)?sales", t, re.I)
-    if fpe:
-        m["fwd_pe"] = float(fpe.group(1).replace(",", ""))
-    if ps:
-        m["ps"] = float(ps.group(1).replace(",", ""))
+    fwd_pe = _num(fpe.group(1)) if fpe else None
+    if fwd_pe is not None:
+        m["fwd_pe"] = fwd_pe
+    ps_val = _num(ps.group(1)) if ps else None
+    if ps_val is not None:
+        m["ps"] = ps_val
     eps = _ttm_eps_from_text(t)
     if eps is not None:
         m["ttm_eps"] = eps

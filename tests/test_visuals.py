@@ -58,6 +58,43 @@ def test_parse_metrics_sets_ttm_eps():
     assert m.get("ttm_eps") == 6.80, m
 
 
+def test_parse_metrics_survives_notfound_forward_pe_line():
+    # Regression: a brief whose "forward P/E, and forward EPS are all NOT FOUND"
+    # made the fwd-P/E regex capture a bare comma → float('') → the whole header
+    # render crashed and the brief showed no chart/cards. Must not raise, and must
+    # not invent a fwd_pe.
+    t = ("Consensus rating, price target, forward P/E, and forward EPS are all "
+         "NOT FOUND in the pack (§7).")
+    m = visuals.parse_metrics_from_brief(t)   # must not raise
+    assert "fwd_pe" not in m
+    assert visuals._num(",") is None
+    assert visuals._num("16.85") == 16.85
+
+
+# ── plain-English metric-card sublabels (2026-07-21) ─────────────────────────
+def test_key_number_cards_carry_plain_sublabels():
+    # Every jargon label gets a plain-English descriptor for a non-trading reader.
+    html = visuals.key_number_cards({
+        "price": 100.0, "price_asof": "2026-07-20",
+        "high_52w": 120.0, "low_52w": 80.0, "range_asof": "2026-07-20",
+        "ttm_eps": 4.10, "ps": 9.2, "fwd_pe": 22.0,
+        "consensus": "PT $110", "consensus_date": "2026-07-20"})
+    assert "kn-plain" in html
+    for descriptor in (
+        "lowest–highest over the past year",
+        "earnings per share, last 12 months",
+        "price vs. yearly sales",
+        "price vs. next year's expected earnings",
+        "average analyst price target",
+    ):
+        assert descriptor in html, descriptor
+
+
+def test_card_without_plain_descriptor_omits_the_row():
+    # The Price card takes no plain descriptor — it must not emit an empty kn-plain.
+    assert '<div class="kn-plain"></div>' not in visuals._card("Price", "$100", "src")
+
+
 # ── split-adjustment + PRICE-card date (2026-07-21 split-cliff fix) ───────────
 class _FakeResp:
     def __init__(self, payload):

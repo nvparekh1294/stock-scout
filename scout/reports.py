@@ -29,10 +29,18 @@ def parse_header(underwrite_text: str) -> dict:
     # Also accept the quick-take format's synonyms ("Read:", "Stage & direction:").
     star = r"[*_\s]*"
     pre = r"^[-*_\s]*"   # tolerate a leading bullet ("- **Stage …**")
+    # A header may be MULTI-LINE (Stage / Conviction / Verdict each on their own
+    # line, as the deployed model emits) OR SINGLE-LINE joined by " · ". Stop each
+    # field at the next " · <label>" or end-of-line so a single-line header cannot
+    # let the Stage cell swallow the conviction+verdict that follow it.
+    end = r"(?=\s+·\s+(?:Stage|Conviction|Verdict|Read)\b|\s*$)"
     return {
-        "stage": (grab(pre + r"Stage(?:\s*&\s*direction)?:\s*(.+)$")
+        "stage": (grab(pre + r"Stage(?:\s*&\s*direction)?:\s*(.+?)" + end)
                   or "").strip("* _") or None,
-        "conviction": (grab(pre + r"Conviction[^:]*:\s*(.+)$") or "").strip("* _") or None,
+        # Conviction may sit mid-line after a " · ", so it is NOT anchored to line
+        # start — accept a line-start OR a middot as its left boundary.
+        "conviction": (grab(r"(?:^|·)[-*_\s]*Conviction[^:\n]*:\s*(.+?)" + end)
+                       or "").strip("* _") or None,
         "verdict": (grab(r"(?:Verdict|Read):" + star + r"([A-Za-z_-]+)")
                     or "").upper() or None,
     }
@@ -67,11 +75,100 @@ _DECISION_BY_VERDICT = {
 }
 
 
+# ── plain-English verdict display (2026-07-21) ──────────────────────────────
+# The machine verdict tokens (UNDERWRITE / WATCH / PASS) are what the pipeline
+# parses and stores — they are NEVER renamed. But those three words mean nothing
+# to a non-trading reader, so wherever a verdict is SHOWN in a brief we translate
+# it to a plain-English label. UNDERWRITE-CANDIDATE is the quick-take token for an
+# early, unconfirmed candidate and gets its own softer label.
+VERDICT_DISPLAY = {
+    "UNDERWRITE": "COMPELLING — evidence suggests the market may be underpricing this",
+    "UNDERWRITE-CANDIDATE": "WORTH A DEEPER LOOK — an early, unconfirmed sign it may be mispriced",
+    "WATCH": "NOT YET — interesting, but no clear edge today",
+    "PASS": "NO EDGE — nothing here suggests it's mispriced",
+}
+
+# One-line caption explaining the 1–5 conviction scale, shown under the header.
+_CONVICTION_LEGEND = (
+    "*Conviction scale: 1 = weak evidence, mostly unknowns · 3 = decent evidence "
+    "but no clear edge · 5 = strong, specific, checked evidence.*")
+
+
+def verdict_label(verdict: str | None) -> str:
+    """Plain-English display label for a machine verdict token. An unknown or
+    empty token passes through unchanged (e.g. 'REVIEW')."""
+    if not verdict:
+        return "—"
+    return VERDICT_DISPLAY.get(verdict.upper(), verdict)
+
+
+def _verdict_cell(verdict: str | None) -> str:
+    """Verdict as shown in a brief: the plain label, with the machine token in
+    parentheses for provenance (omitted when the label IS the token)."""
+    if not verdict:
+        return "—"
+    disp = verdict_label(verdict)
+    return disp + (f" ({verdict})" if disp != verdict else "")
+
+
+def _conviction_display(raw: str | None) -> str:
+    """Render conviction as 'N/5' on the standardized 1–5 scale. Tolerant of what
+    the model actually wrote: '3/5' or '3 / 5' keep their own denominator; a bare
+    '3' becomes '3/5'; a legacy 1–10 value (>5) passes through unchanged so an old
+    brief never mis-renders as e.g. '7/5'. None → '—'."""
+    if not raw:
+        return "—"
+    raw = raw.strip()
+    md = re.search(r"(\d+)\s*/\s*(\d+)", raw)
+    if md:
+        return f"{md.group(1)}/{md.group(2)}"
+    mn = re.search(r"\d+", raw)
+    if not mn:
+        return raw
+    n = int(mn.group(0))
+    return f"{n}/5" if n <= 5 else raw
+
+
+def _oneline(s: str) -> str:
+    """Collapse internal whitespace so a multi-line prose field renders cleanly
+    inside a single-line blockquote callout."""
+    return " ".join((s or "").split())
+
+
+def _grab_field(text: str, label: str) -> str | None:
+    """Best-effort single-line field grab ('Watching for: …', 'Worth a full
+    deep-dive? …'). Tolerant of a leading bullet and markdown emphasis. None when
+    absent — so legacy briefs without the field omit it gracefully."""
+    m = re.search(r"^[-*_\s]*\*{0,2}" + label + r"\*{0,2}\s*:?\s*(.+?)\s*$",
+                  text or "", re.I | re.M)
+    if not m:
+        return None
+    val = m.group(1).strip().strip("*_ ").strip()
+    return val or None
+
+
+def parse_conclusion_fields(text: str) -> dict:
+    """Parse the plain-English conclusion fields the 2026-07-21 prompts require:
+    `Bottom line:` (a 2–4 sentence plain conclusion), `Watching for:` (the concrete
+    WATCH trigger), and `Worth a full deep-dive?` (standard/quick escalation line).
+    Every field is tolerant: absent → None, so briefs written before these fields
+    existed still parse and simply omit them."""
+    bl = _section(text or "", r"Bottom line")
+    if bl:
+        bl = bl.strip().strip("*_ \n").strip() or None
+    return {
+        "bottom_line": bl,
+        "watching_for": _grab_field(text, "Watching for"),
+        "deep_dive": _grab_field(text, r"Worth a full deep-dive\?"),
+    }
+
+
 def render_full_brief(symbol: str, as_of: str, underwrite_text: str,
                       adversary_text: str, checker_md: str,
                       adversary_passed_checker_md: str | None = None,
                       pack_name: str = "", n_evidence: int = 0) -> str:
     h = parse_header(underwrite_text)
+    concl = parse_conclusion_fields(underwrite_text)
     adv_verdict = None
     m = re.search(r"independent verdict[^\n]*\n?(.+?)(?=\n\n)", adversary_text, re.I | re.S)
     if m:
@@ -96,15 +193,25 @@ def render_full_brief(symbol: str, as_of: str, underwrite_text: str,
         "",
         "| | |",
         "|---|---|",
-        f"| **Verdict** | **{verdict}** |",
+        f"| **Verdict** | **{_verdict_cell(verdict)}** |",
         f"| **Stage** | {h['stage'] or '—'} |",
-        f"| **Conviction (2–4yr)** | {h['conviction'] or '—'} |",
+        f"| **Conviction (2–4yr)** | {_conviction_display(h['conviction'])} |",
         f"| **Sizing** | {_clip(sizing or '—', 180)} |",
         f"| **Pipeline** | evidence pack ({n_evidence} sources"
         + (f", `{pack_name}`" if pack_name else "") + ") → blind underwrite (Opus, "
         "pack only) → deterministic checkers → adversarial review (Opus, fresh "
         "context) → assembled brief |",
         "",
+        _CONVICTION_LEGEND,
+        "",
+    ]
+    # Plain-English conclusion, surfaced prominently right under the verdict so a
+    # non-trading reader sees the takeaway before the dense analysis below.
+    if concl["bottom_line"]:
+        parts += [f"> **Bottom line:** {_oneline(concl['bottom_line'])}", ""]
+    if concl["watching_for"]:
+        parts += [f"> **Watching for:** {_oneline(concl['watching_for'])}", ""]
+    parts += [
         "## Blind underwrite (Opus — saw the evidence pack only)",
         underwrite_text.strip(),
         "",
@@ -156,16 +263,28 @@ def _strip_redundant_header(body: str) -> str:
 def render_short_brief(symbol: str, as_of: str, depth: str, body_text: str,
                        checker_md: str, pack_name: str = "", n_evidence: int = 0) -> str:
     h = parse_header(body_text)
+    concl = parse_conclusion_fields(body_text)
     body_text = _strip_redundant_header(body_text)
     parts = [
         f"# {symbol} — {depth.title()} · {as_of}",
         "",
-        f"**Verdict:** {h['verdict'] or '—'} · **Stage:** {h['stage'] or '—'} · "
-        f"**Conviction:** {h['conviction'] or '—'}",
+        f"**Verdict:** {_verdict_cell(h['verdict'])} · **Stage:** {h['stage'] or '—'} · "
+        f"**Conviction:** {_conviction_display(h['conviction'])}",
+        _CONVICTION_LEGEND,
         f"*Pipeline: evidence pack ({n_evidence} sources"
         + (f", `{pack_name}`" if pack_name else "") + ") → {tier} → checkers. "
         "No adversarial pass at this tier.".format(tier=depth),
         "",
+    ]
+    # Surface the plain-English conclusion right under the verdict (tolerant of
+    # older briefs that lack these fields — each is omitted when absent).
+    if concl["bottom_line"]:
+        parts += [f"> **Bottom line:** {_oneline(concl['bottom_line'])}", ""]
+    if concl["watching_for"]:
+        parts += [f"> **Watching for:** {_oneline(concl['watching_for'])}", ""]
+    if concl["deep_dive"]:
+        parts += [f"> **Worth a full deep-dive?** {_oneline(concl['deep_dive'])}", ""]
+    parts += [
         body_text.strip(),
         "",
         "## Deterministic checker report",
