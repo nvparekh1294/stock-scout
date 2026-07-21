@@ -193,7 +193,7 @@ def price_latest(symbol: str) -> float | None:
         start = (date.today() - timedelta(days=12)).isoformat()
         r = requests.get(f"{DATA_BASE}/stocks/{symbol}/bars",
                          params={"timeframe": "1Day", "start": start, "limit": 10,
-                                 "feed": "iex"},
+                                 "feed": "iex", "adjustment": "split"},
                          headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": sec},
                          timeout=20)
         if r.status_code != 200:

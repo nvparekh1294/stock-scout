@@ -36,7 +36,8 @@ def _alpaca_price_range(symbol: str) -> dict:
     try:
         r = requests.get(
             f"{DATA_BASE}/stocks/{symbol}/bars",
-            params={"timeframe": "1Day", "start": start, "limit": 400, "feed": "iex"},
+            params={"timeframe": "1Day", "start": start, "limit": 400, "feed": "iex",
+                    "adjustment": "split"},
             headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": sec}, timeout=20)
         if r.status_code != 200:
             return {"error": f"Alpaca bars HTTP {r.status_code}"}

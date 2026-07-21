@@ -183,7 +183,8 @@ def _closes_since(symbol: str, start: str) -> list[tuple[str, float]]:
     try:
         r = requests.get(
             f"https://data.alpaca.markets/v2/stocks/{symbol}/bars",
-            params={"timeframe": "1Day", "start": start, "limit": 500, "feed": "iex"},
+            params={"timeframe": "1Day", "start": start, "limit": 500, "feed": "iex",
+                    "adjustment": "split"},
             headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": sec}, timeout=20)
         if r.status_code != 200:
             return []

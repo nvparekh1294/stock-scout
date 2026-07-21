@@ -30,10 +30,36 @@ _NEUTRAL = "#9a8c98"   # legible on both #ffffff-ish and #15151f backgrounds
 
 
 # ── data ───────────────────────────────────────────────────────────────────
+def _latest_daily_bar(symbol: str, key: str, sec: str) -> dict | None:
+    """Latest DAILY bar (split-adjusted) — {'close', 'asof'} — for the PRICE card.
+    Alpaca stamps a weekly bar with the week-OPEN Monday, so the last weekly bar's
+    timestamp is the wrong "as of" for the price shown; a daily bar carries the
+    true trading date. Returns None on any miss (caller falls back to weekly).
+    All bars fetched split-adjusted so a split doesn't create a false price."""
+    try:
+        start = (date.today() - timedelta(days=12)).isoformat()
+        r = requests.get(
+            f"{DATA_BASE}/stocks/{symbol}/bars",
+            params={"timeframe": "1Day", "start": start, "limit": 10, "feed": "iex",
+                    "adjustment": "split"},
+            headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": sec}, timeout=20)
+        if r.status_code != 200:
+            return None
+        bars = r.json().get("bars", [])
+        if not bars:
+            return None
+        return {"close": round(bars[-1]["c"], 2), "asof": bars[-1]["t"][:10]}
+    except Exception:
+        return None
+
+
 def weekly_closes(symbol: str) -> dict:
-    """1-year weekly closes + 52-wk high/low from Alpaca (IEX). Returns
-    {closes:[(date,close)], high, low, latest, asof} or {'error': ...}. Never
-    raises — an unavailable feed is an honest gap, not a crash."""
+    """1-year weekly closes + 52-wk high/low from Alpaca (IEX), split-adjusted so a
+    stock split doesn't paint a false cliff or mix pre/post-split high/low. Returns
+    {closes:[(date,close)], high, low, latest, asof, price, price_asof} or
+    {'error': ...}. `price`/`price_asof` come from the latest DAILY bar (the true
+    trading date), not the week-open weekly timestamp. Never raises — an
+    unavailable feed is an honest gap, not a crash."""
     creds = _alpaca_creds()
     if not creds:
         return {"error": "Alpaca keys unavailable"}
@@ -42,7 +68,8 @@ def weekly_closes(symbol: str) -> dict:
     try:
         r = requests.get(
             f"{DATA_BASE}/stocks/{symbol}/bars",
-            params={"timeframe": "1Week", "start": start, "limit": 60, "feed": "iex"},
+            params={"timeframe": "1Week", "start": start, "limit": 60, "feed": "iex",
+                    "adjustment": "split"},
             headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": sec}, timeout=20)
         if r.status_code != 200:
             return {"error": f"Alpaca bars HTTP {r.status_code}"}
@@ -50,11 +77,18 @@ def weekly_closes(symbol: str) -> dict:
         if not bars:
             return {"error": "no weekly bars (symbol may be thin on IEX)"}
         closes = [(b["t"][:10], round(b["c"], 2)) for b in bars]
+        # Price card reflects the latest DAILY close + its true date (weekly bars
+        # are stamped with the week-open Monday); fall back to the weekly close.
+        daily = _latest_daily_bar(symbol, key, sec)
+        price = daily["close"] if daily else round(bars[-1]["c"], 2)
+        price_asof = daily["asof"] if daily else bars[-1]["t"][:10]
         return {"closes": closes,
                 "high": round(max(b["h"] for b in bars), 2),
                 "low": round(min(b["l"] for b in bars), 2),
                 "latest": round(bars[-1]["c"], 2),
-                "asof": bars[-1]["t"][:10]}
+                "asof": bars[-1]["t"][:10],
+                "price": price,
+                "price_asof": price_asof}
     except Exception as e:
         return {"error": f"Alpaca fetch failed: {e}"}
 
@@ -296,8 +330,10 @@ def build_metrics(symbol: str, brief_text: str = "", db=None) -> dict:
                "fwd_pe": NF}
     price = NF
     if "error" not in series:
-        price = series["latest"]
-        metrics.update(price=series["latest"], price_asof=series["asof"],
+        # PRICE card = latest DAILY close + its true trading date (weekly bars are
+        # stamped week-open Monday); 52-wk range stays the run date.
+        price = series.get("price", series["latest"])
+        metrics.update(price=price, price_asof=series.get("price_asof", series["asof"]),
                        high_52w=series["high"], low_52w=series["low"],
                        range_asof=today)
     else:
