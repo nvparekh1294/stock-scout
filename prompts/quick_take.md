@@ -32,8 +32,11 @@ Header: `## {{SYMBOL}} — quick take as of {{AS_OF_DATE}}`
 - **What might be unpriced (cited) — or "nothing provable":** one or two
   sentences, each fact dated.
 - **3 most decision-relevant facts (dated, cited).**
-- **One valuation line:** what today's price roughly assumes (multiples from the
-  pack; no full scenario tree at this tier).
+- **One valuation line:** what today's price roughly assumes — use the multiples
+  in the pack's **Valuation snapshot** (trailing P/E, P/S, market cap, revenue
+  growth); if a multiple there is NOT FOUND or n/m, say so plainly rather than
+  supplying one. Never invent a number that is not in the pack; no full scenario
+  tree at this tier.
 - **Biggest risk / most likely way this is already priced (one line, cited).**
 - **Expression (one line, only if the pack has an options snapshot):** would a
   defined-risk structure (long-dated call / protective put) fit this thesis

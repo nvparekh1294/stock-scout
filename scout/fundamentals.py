@@ -40,6 +40,9 @@ _CASH = ("CashAndCashEquivalentsAtCarryingValue",
 _SHARES_DEI = ("EntityCommonStockSharesOutstanding",)
 _SHARES_GAAP = ("CommonStockSharesOutstanding",
                 "WeightedAverageNumberOfDilutedSharesOutstanding")
+# Reported diluted EPS for the fiscal year (a filed line item — not computed —
+# so trailing P/E traces to the filing, never to net_income ÷ shares guesswork).
+_EPS_DILUTED = ("EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted")
 
 
 def _facts(cik: int) -> dict | None:
@@ -154,6 +157,8 @@ def company_facts_metrics(cik: int) -> dict | None:
     out["gross_profit"] = gp
     out["operating_income"] = oi
     out["net_income"] = ni
+    # Reported FY diluted EPS (same fiscal period as revenue when present).
+    out["eps_diluted"] = latest_fy_val(_EPS_DILUTED)
     out["dep_amort"] = da
     out["gm"] = (gp / rev if gp is not None and rev else None)
     out["om"] = (oi / rev if oi is not None and rev else None)
@@ -236,6 +241,101 @@ def peer_metric_row(cik: int, price: float | None, fwd_eps: float | None,
         "fcf": f.get("fcf"), "de": f.get("de"),
         "ps": ps, "fwd_pe": fwd_pe, "ev_ebitda": ev_ebitda,
         "source_url": f.get("source_url"), "doc_date": f.get("fy_end"),
+    }
+
+
+def _bar_close_near(symbol: str, target: str, adjustment: str) -> float | None:
+    """Daily close on/just after `target` (ISO date) from Alpaca IEX with the
+    given adjustment ('split' or 'raw'). None on any failure — read-only."""
+    creds = _alpaca_creds()
+    if not creds:
+        return None
+    key, sec, _ = creds
+    try:
+        from datetime import timedelta
+        end = (date.fromisoformat(target) + timedelta(days=12)).isoformat()
+        r = requests.get(f"{DATA_BASE}/stocks/{symbol}/bars",
+                         params={"timeframe": "1Day", "start": target, "end": end,
+                                 "limit": 5, "feed": "iex", "adjustment": adjustment},
+                         headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": sec},
+                         timeout=20)
+        if r.status_code != 200:
+            return None
+        bars = r.json().get("bars", [])
+        return round(bars[0]["c"], 4) if bars else None
+    except Exception:
+        return None
+
+
+def split_since_fy(symbol: str, fy_end: str | None) -> str:
+    """Detect a stock split between fy_end and today (the NFLX 10x class of
+    error: today's split-adjusted price ÷ a filed pre-split EPS overstates P/E by
+    the split factor). Compares the split-adjusted vs raw close at fy_end — the
+    adjusted series divides historical prices by any post-date split factor, so a
+    material adjusted-vs-raw gap AT that historical date means a split happened
+    since. Returns 'none', 'split', or 'unknown' (detection unavailable → caller
+    prints P/E with a caveat, never silently wrong)."""
+    if not fy_end:
+        return "unknown"
+    adj = _bar_close_near(symbol, fy_end, "split")
+    raw = _bar_close_near(symbol, fy_end, "raw")
+    if not adj or not raw:
+        return "unknown"
+    ratio = raw / adj
+    return "none" if 0.99 <= ratio <= 1.01 else "split"
+
+
+def valuation_snapshot(cik: int, price: float | None, fund: dict | None = None,
+                       symbol: str | None = None) -> dict | None:
+    """Compact valuation multiples for a quick take, from EDGAR company-facts +
+    a live (split-adjusted) Alpaca price. Reuses company_facts_metrics for the
+    EDGAR fetch/parse — no new statement-parsing. Every derived cell is None
+    (→ NOT FOUND) when its inputs are absent; a non-positive diluted EPS yields
+    pe=None with pe_nm=True ("n/m — earnings negative") rather than a misleading
+    negative multiple. When `symbol` is given and a P/E is about to be computed,
+    a cheap split-detection guard runs (split_since_fy): a split since the FY
+    filing → pe_split=True (filed EPS is pre-split, not yet restated → no number);
+    detection unavailable → pe_caveat=True (print P/E with an explicit caveat).
+    `fund` may be a pre-fetched company_facts_metrics dict to avoid a second EDGAR
+    fetch. Returns None only if company-facts can't be fetched at all."""
+    f = fund or company_facts_metrics(cik)
+    if not f:
+        return None
+    rev = f.get("revenue")
+    eps = f.get("eps_diluted")
+    shares = f.get("shares")
+    fy_end = f.get("fy_end")
+    mcap = (price * shares) if (price and shares) else None
+    # A multiple is only meaningful with a positive denominator (same discipline
+    # as peer_metric_row): a loss-maker has no trailing P/E.
+    ps = (mcap / rev) if (mcap and rev and rev > 0) else None
+    pe, pe_nm, pe_split, pe_caveat = None, False, False, False
+    if eps is not None and eps <= 0:
+        pe_nm = True  # negative/zero earnings → P/E not meaningful (price-independent)
+    elif price and eps is not None and eps > 0:
+        # About to compute P/E → now (and only now) pay for the split guard.
+        status = split_since_fy(symbol, fy_end) if symbol else "none"
+        if status == "split":
+            pe_split = True  # filed EPS pre-split → refuse a wrong-by-split-factor P/E
+        else:
+            pe = price / eps
+            pe_caveat = (status == "unknown")  # detection failed → number + caveat
+    return {
+        "entity": f.get("entity"),
+        "fy_end": fy_end,
+        "price": price,
+        "revenue": rev,
+        "rev_growth": f.get("rev_growth"),
+        "eps_diluted": eps,
+        "net_income": f.get("net_income"),
+        "shares": shares,
+        "market_cap": mcap,
+        "ps": ps,
+        "pe": pe,
+        "pe_nm": pe_nm,
+        "pe_split": pe_split,
+        "pe_caveat": pe_caveat,
+        "source_url": f.get("source_url"),
     }
 
 

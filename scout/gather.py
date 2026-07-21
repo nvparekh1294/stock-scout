@@ -193,6 +193,98 @@ def _consensus_snapshot(symbol: str) -> dict:
                     "consensus source."}
 
 
+def _human_usd(v: float) -> str:
+    """Compact human dollar figure for the pack (e.g. $1.23B, $456.7M)."""
+    a = abs(v)
+    if a >= 1e12:
+        return f"${v / 1e12:.2f}T"
+    if a >= 1e9:
+        return f"${v / 1e9:.2f}B"
+    if a >= 1e6:
+        return f"${v / 1e6:.1f}M"
+    return f"${v:,.0f}"
+
+
+def _valuation_section(res: dict, price: dict, today: str,
+                       symbol: str) -> tuple[list[str], int]:
+    """Compact '## Valuation snapshot' block from EDGAR company-facts (via
+    fundamentals.valuation_snapshot) + the already-fetched split-adjusted Alpaca
+    close — near-zero extra cost, so a quick take shows real multiples instead of
+    'no computed multiple in this pack'. A non-filer (no CIK) is skipped with an
+    honest one-liner rather than computed on a mismatched instrument. Every figure
+    is dated + sourced; a missing fact renders NOT FOUND, a non-positive EPS
+    renders 'n/m', a split since the FY filing renders 'n/m (stock split…)'. EDGAR
+    failures degrade to a NOT FOUND line, never a crash. Returns (lines,
+    n_sources_added — 1 for the companyfacts fetch, else 0)."""
+    lines = ["", "## Valuation snapshot"]
+    cik = res.get("cik")
+    if res.get("sec_filer") is False or not cik:
+        lines.append("- NOT COMPUTED: not an SEC filer with a CIK, so no EDGAR "
+                     "company-facts exist to compute fundamentals for this ticker.")
+        return lines, 0
+    from .fundamentals import valuation_snapshot
+    has_price = "error" not in price
+    latest_close = price.get("latest_close") if has_price else None
+    try:
+        vs = valuation_snapshot(cik, latest_close, symbol=symbol)
+    except Exception as e:  # degrade to NOT FOUND — a quick take never crashes here
+        lines.append(f"- NOT FOUND: valuation snapshot could not be computed ({e}).")
+        return lines, 0
+    if not vs:
+        lines.append(f"- NOT FOUND: EDGAR company-facts could not be fetched for "
+                     f"CIK {cik}; no valuation snapshot this run.")
+        return lines, 0
+    fy = vs.get("fy_end") or "period n/a"
+    # Source line: date the price with its actual trading date (asof), and drop
+    # the price clause entirely when no live price was fetched this run.
+    price_asof = price.get("asof") if has_price else None
+    price_clause = (f"; price Alpaca IEX {price_asof}, split-adjusted"
+                    if price_asof else "; no live price this run")
+    lines.append(f"- Source: EDGAR company-facts (FY period end {fy}){price_clause}.")
+    if vs.get("market_cap") is not None:
+        lines.append(f"- Market cap: {_human_usd(vs['market_cap'])} (close "
+                     f"${vs['price']} × {vs['shares']:,.0f} shares outstanding per "
+                     f"latest EDGAR cover page).")
+    else:
+        lines.append("- Market cap: NOT FOUND (need both a live close and EDGAR "
+                     "shares outstanding).")
+    if vs.get("revenue") is not None:
+        rg = vs.get("rev_growth")
+        rg_txt = (f"; revenue YoY {rg * 100:+.1f}%" if rg is not None
+                  else "; revenue YoY NOT FOUND (no prior-year revenue in facts)")
+        lines.append(f"- FY revenue: {_human_usd(vs['revenue'])} (FY {fy}){rg_txt}.")
+    else:
+        lines.append("- FY revenue: NOT FOUND in EDGAR company-facts.")
+    if vs.get("eps_diluted") is not None:
+        lines.append(f"- FY diluted EPS: ${vs['eps_diluted']:.2f} (FY {fy}).")
+    else:
+        lines.append("- FY diluted EPS: NOT FOUND in EDGAR company-facts.")
+    if vs.get("pe") is not None:
+        caveat = (" (caveat: if the stock split since the FY filing, filed EPS may "
+                  "be pre-split)") if vs.get("pe_caveat") else ""
+        lines.append(f"- Trailing P/E: {vs['pe']:.1f}× (close ÷ FY diluted EPS){caveat}.")
+    elif vs.get("pe_split"):
+        lines.append("- Trailing P/E: n/m (stock split since the FY filing — filed "
+                     "EPS not yet restated).")
+    elif vs.get("pe_nm"):
+        lines.append("- Trailing P/E: n/m (earnings negative) — no meaningful "
+                     "multiple on a loss.")
+    else:
+        # Name only what is actually missing (EPS may be present but price absent,
+        # or vice versa) — never claim EPS is missing when it was found.
+        missing = []
+        if vs.get("price") is None:
+            missing.append("a live close")
+        if vs.get("eps_diluted") is None:
+            missing.append("FY diluted EPS")
+        lines.append(f"- Trailing P/E: NOT FOUND (need {' and '.join(missing) or 'inputs'}).")
+    if vs.get("ps") is not None:
+        lines.append(f"- P/S: {vs['ps']:.1f}× (market cap ÷ FY revenue).")
+    else:
+        lines.append("- P/S: NOT FOUND (need market cap and positive FY revenue).")
+    return lines, 1
+
+
 class Inactive(str):
     """Sentinel light_evidence returns when the ticker is inactive/delisted — a
     str subclass carrying the honest, owner-facing reason. The caller must
@@ -274,6 +366,12 @@ def light_evidence(symbol: str) -> tuple[str, int] | Inactive | None:
                      else "Latest EARNINGS 8-K (filed {d}) — headline figures, "
                           "verbatim excerpt").format(d=k["date"])
             lines += ["", f"### {label}", f"Source: {k['url']}", "", k["text"]]
+
+    # Valuation snapshot (EDGAR company-facts + latest split-adjusted close) —
+    # real fundamentals at near-zero extra cost. Skips honestly for non-filers.
+    val_lines, val_n = _valuation_section(res, price, today, symbol)
+    lines += val_lines
+    n_sources += val_n
 
     lines += ["", "## Consensus snapshot"]
     if "note" in consensus:
